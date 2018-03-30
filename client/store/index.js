@@ -287,6 +287,11 @@ export const actions = {
         dispatch(Bank.setOperationCustomLabel(operation, label));
     },
 
+    setOperationBudgetDate(dispatch, operation, budgetDate) {
+        assertDefined(dispatch);
+        dispatch(Bank.setOperationBudgetDate(operation, budgetDate));
+    },
+
     mergeOperations(dispatch, toKeep, toRemove) {
         assertDefined(dispatch);
         dispatch(Bank.mergeOperations(toKeep, toRemove));
@@ -296,6 +301,11 @@ export const actions = {
     createCategory(dispatch, category) {
         assertDefined(dispatch);
         dispatch(Category.create(category));
+    },
+
+    createDefaultCategories(dispatch) {
+        assertDefined(dispatch);
+        dispatch(Category.createDefault());
     },
 
     updateCategory(dispatch, former, newer) {
@@ -387,14 +397,19 @@ export const actions = {
         dispatch(Bank.resyncBalance(accountId));
     },
 
+    updateAccount(dispatch, accountId, newFields) {
+        assertDefined(dispatch);
+        dispatch(Bank.updateAccount(accountId, newFields));
+    },
+
     deleteAccount(dispatch, accountId) {
         assertDefined(dispatch);
         dispatch(Bank.deleteAccount(accountId, get));
     },
 
-    createAccess(dispatch, uuid, login, password, fields) {
+    createAccess(dispatch, uuid, login, password, fields, createDefaultAlerts) {
         assertDefined(dispatch);
-        dispatch(Bank.createAccess(get, uuid, login, password, fields));
+        dispatch(Bank.createAccess(get, uuid, login, password, fields, createDefaultAlerts));
     },
 
     updateAccess(dispatch, accessId, login, password, customFields) {
@@ -526,7 +541,10 @@ export function init() {
                 accept(state);
             });
         })
-        .catch(genericErrorHandler);
+        .catch(err => {
+            genericErrorHandler(err);
+            throw err;
+        });
 }
 
 // Basic action creators

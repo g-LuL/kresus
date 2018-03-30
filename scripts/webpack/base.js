@@ -29,6 +29,7 @@ let entry = {
         './node_modules/dygraphs/dist/dygraph.css',
         './node_modules/c3/c3.css',
         './node_modules/flatpickr/dist/themes/light.css',
+        './node_modules/react-select/dist/react-select.css',
         './client/css/base.css',
         './node_modules/bootstrap-kresus/js/bootstrap.js',
         './client/init.js'
@@ -149,7 +150,16 @@ const config = {
         ]
     },
 
-    resolve: {
+    devServer: {
+        disableHostCheck: true,
+        host: "0.0.0.0",
+        proxy: {
+            "/api": "http://localhost:9876/",
+            "/manifest": "http://localhost:9876/"
+        }
+    },
+
+    resolve: {
         modules: ['node_modules', 'build/spritesmith-generated']
     },
 
@@ -195,9 +205,11 @@ const config = {
                 cssImageRef: '~sprite.png'
             }
         }),
-        // Only keep the useful locales from Moment
+
+        // Only keep the useful locales from Moment.
         new webpack.ContextReplacementPlugin(/moment[\/\\]locale$/, localesRegex),
-        // Generate a themes.json file with the list of themes
+
+        // Generate a themes.json file with the list of themes.
         new GenerateJsonPlugin('themes.json', {themes: themes})
     ]
 }

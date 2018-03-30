@@ -2,25 +2,6 @@ import { assert, translate as $t } from '../helpers';
 
 const API_VERSION = 'v1';
 
-let API_BASE = '';
-if (process.env.NODE_ENV === 'development') {
-    // In development mode, force the API port to be 9876, to be compatible
-    // with webpack-dev-server.
-    let { origin } = new URL(window.location);
-
-    let split = origin.match(/(https?:\/\/)(.*)/);
-    let scheme = split[1];
-    let baseURL = split[2];
-
-    // Remove port if needed.
-    if (baseURL.includes(':')) {
-        baseURL = baseURL.split(':')[0];
-    }
-
-    // Force port to 9876.
-    API_BASE = `${scheme + baseURL}:9876/`;
-}
-
 /**
  * Build a promise to fetch data from the API, with minor post-processing.
  * Takes the same parameters as the fetch API.
@@ -34,9 +15,10 @@ function buildFetchPromise(url, options = {}) {
         // Send credentials in case the API is behind an HTTP auth
         options.credentials = 'include';
     }
+
     let isOk = null;
     let isJson = false;
-    return fetch(API_BASE + url, options)
+    return fetch(url, options)
         .then(
             response => {
                 isOk = response.ok;
@@ -94,10 +76,18 @@ function buildFetchPromise(url, options = {}) {
 }
 
 export function init() {
-    return buildFetchPromise(`api/${API_VERSION}/all/`).then(world => {
+    let all = buildFetchPromise(`api/${API_VERSION}/all/`).then(world => {
         for (let i = 0; i < world.accesses.length; i++) {
             world.accesses[i].customFields = JSON.parse(world.accesses[i].customFields || '[]');
         }
+        return world;
+    });
+
+    let themes = buildFetchPromise('themes.json');
+
+    return Promise.all([all, themes]).then(([world, jsonThemes]) => {
+        assert(jsonThemes.themes instanceof Array, 'JSON themes must be an array');
+        world.themes = jsonThemes.themes;
         return world;
     });
 }
@@ -126,6 +116,16 @@ export function resyncBalance(accountId) {
     return buildFetchPromise(`api/${API_VERSION}/accounts/${accountId}/resync-balance`).then(
         data => data.initialAmount
     );
+}
+
+export function updateAccount(accountId, attributes) {
+    return buildFetchPromise(`api/${API_VERSION}/accounts/${accountId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(attributes)
+    });
 }
 
 export function deleteAccount(accountId) {
@@ -190,6 +190,10 @@ export function setTypeForOperation(operationId, type) {
 
 export function setCustomLabel(operationId, customLabel) {
     return updateOperation(operationId, { customLabel });
+}
+
+export function setOperationBudgetDate(operationId, budgetDate) {
+    return updateOperation(operationId, { budgetDate });
 }
 
 export function mergeOperations(toKeepId, toRemoveId) {

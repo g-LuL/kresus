@@ -19,6 +19,10 @@ class CategoryList extends React.Component {
         this.refNewCategory = this.refNewCategory.bind(this);
     }
 
+    handleAddDefault = () => {
+        this.props.createDefaultCategories();
+    };
+
     handleShowForm(e) {
         e.preventDefault();
 
@@ -73,10 +77,10 @@ class CategoryList extends React.Component {
         }
 
         return (
-            <div>
-                <p className="clearfix">
+            <div className="categories">
+                <p>
                     <button
-                        className="btn btn-default pull-right"
+                        className="btn btn-default create-category"
                         aria-label={buttonAriaLabel}
                         onClick={this.handleShowForm}>
                         <span className={`fa fa-${buttonType}-circle`} />
@@ -87,14 +91,14 @@ class CategoryList extends React.Component {
                 <table className="table table-striped table-hover table-bordered">
                     <thead>
                         <tr>
-                            <th className="col-sm-1">
+                            <th className="category-color">
                                 {$t('client.category.column_category_color')}
                             </th>
-                            <th className="col-sm-10">
-                                {$t('client.category.column_category_name')}
-                            </th>
+                            <th>{$t('client.category.column_category_name')}</th>
 
-                            <th className="col-sm-1">{$t('client.category.column_action')}</th>
+                            <th className="category-action">
+                                {$t('client.category.column_action')}
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
@@ -102,6 +106,16 @@ class CategoryList extends React.Component {
                         {items}
                     </tbody>
                 </table>
+
+                <p>
+                    <button
+                        className="btn btn-default"
+                        aria-label="add default"
+                        onClick={this.handleAddDefault}>
+                        <span className={`fa fa-${buttonType}-circle`} />
+                        {$t('client.category.add_default')}
+                    </button>
+                </p>
             </div>
         );
     }
@@ -118,6 +132,7 @@ const Export = connect(
             createCategory(category) {
                 actions.createCategory(dispatch, category);
             },
+            createDefaultCategories: () => actions.createDefaultCategories(dispatch),
             updateCategory(former, newer) {
                 actions.updateCategory(dispatch, former, newer);
             },

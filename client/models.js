@@ -69,27 +69,14 @@ export class Account {
             defaultCurrency;
         this.formatCurrency = currency.makeFormat(this.currency);
         this.currencySymbol = currency.symbolFor(this.currency);
-    }
-
-    mergeOwnProperties(other) {
-        assert(this.id === other.id, 'ids of merged accounts must be equal');
-        this.bank = other.bank;
-        this.bankAccess = other.bankAccess;
-        this.title = other.title;
-        this.accountNumber = other.accountNumber;
-        this.initialAmount = other.initialAmount;
-        this.lastChecked = other.lastChecked;
-        this.iban = other.iban;
-        this.currency = other.currency;
-        this.formatCurrency = other.formatCurrency;
-        this.currencySymbol = other.currencySymbol;
-        // No need to merge ids, they're the same
+        this.excludeFromBalance =
+            (maybeHas(arg, 'excludeFromBalance') && arg.excludeFromBalance) || false;
     }
 }
 
 export class Operation {
     constructor(arg) {
-        this.bankAccount = assertHas(arg, 'bankAccount') && arg.bankAccount;
+        this.accountId = assertHas(arg, 'accountId') && arg.accountId;
         this.title = assertHas(arg, 'title') && arg.title;
         this.date = assertHas(arg, 'date') && new Date(arg.date);
         this.amount = assertHas(arg, 'amount') && arg.amount;
@@ -101,6 +88,7 @@ export class Operation {
         this.categoryId = arg.categoryId || NONE_CATEGORY_ID;
         this.type = arg.type || UNKNOWN_OPERATION_TYPE;
         this.customLabel = (maybeHas(arg, 'customLabel') && arg.customLabel) || null;
+        this.budgetDate = (maybeHas(arg, 'budgetDate') && new Date(arg.budgetDate)) || this.date;
     }
 }
 
@@ -130,14 +118,6 @@ export class Category {
         // Optional
         this.parentId = arg.parentId;
     }
-
-    mergeOwnProperties(other) {
-        assert(other.id === this.id, 'merged categories ids must be equal');
-        this.title = other.title;
-        this.color = other.color;
-        this.threshold = other.threshold || 0;
-        this.parentId = other.parentId;
-    }
 }
 
 export class Setting {
@@ -150,7 +130,7 @@ export class Setting {
 export class Alert {
     constructor(arg) {
         this.id = assertHas(arg, 'id') && arg.id;
-        this.bankAccount = assertHas(arg, 'bankAccount') && arg.bankAccount;
+        this.accountId = assertHas(arg, 'accountId') && arg.accountId;
 
         this.type = assertHas(arg, 'type') && arg.type;
 
@@ -163,13 +143,5 @@ export class Alert {
 
         let validationError = checkAlert(this);
         assert(!validationError);
-    }
-
-    merge(other) {
-        for (let attr of ['frequency', 'limit', 'order']) {
-            if (maybeHas(other, attr)) {
-                this[attr] = other[attr];
-            }
-        }
     }
 }

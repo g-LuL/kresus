@@ -12,6 +12,7 @@ import {
 
 import { Account, Access, Alert, Bank, Operation } from '../models';
 
+import DefaultAlerts from '../../shared/default-alerts.json';
 import DefaultSettings from '../../shared/default-settings';
 
 import Errors, { genericErrorHandler } from '../errors';
@@ -25,6 +26,7 @@ import {
     CREATE_ALERT,
     CREATE_OPERATION,
     DELETE_ACCESS,
+    UPDATE_ACCOUNT,
     DELETE_ACCOUNT,
     DELETE_ALERT,
     DELETE_OPERATION,
@@ -33,6 +35,7 @@ import {
     SET_OPERATION_CATEGORY,
     SET_OPERATION_CUSTOM_LABEL,
     SET_OPERATION_TYPE,
+    SET_OPERATION_BUDGET_DATE,
     RUN_ACCOUNTS_SYNC,
     RUN_BALANCE_RESYNC,
     RUN_OPERATIONS_SYNC,
@@ -67,6 +70,15 @@ const basic = {
             operation,
             customLabel,
             formerCustomLabel
+        };
+    },
+
+    setOperationBudgetDate(operation, budgetDate, formerBudgetDate) {
+        return {
+            type: SET_OPERATION_BUDGET_DATE,
+            operation,
+            budgetDate,
+            formerBudgetDate
         };
     },
 
@@ -131,6 +143,14 @@ const basic = {
             type: RUN_BALANCE_RESYNC,
             accountId,
             initialAmount
+        };
+    },
+
+    updateAccount(accountId, updated) {
+        return {
+            type: UPDATE_ACCOUNT,
+            id: accountId,
+            updated
         };
     },
 
@@ -233,6 +253,28 @@ export function setOperationCustomLabel(operation, customLabel) {
     };
 }
 
+export function setOperationBudgetDate(operation, budgetDate) {
+    assert(typeof operation.id === 'string', 'setOperationBudgetDate first arg must have an id');
+    assert(
+        budgetDate === null || budgetDate instanceof Date,
+        'setOperationBudgetDate 2nd arg must be Date or null'
+    );
+
+    return dispatch => {
+        dispatch(basic.setOperationBudgetDate(operation, budgetDate, operation.budgetDate));
+        backend
+            .setOperationBudgetDate(operation.id, budgetDate)
+            .then(() => {
+                dispatch(success.setOperationBudgetDate(operation, budgetDate));
+            })
+            .catch(err => {
+                dispatch(
+                    fail.setOperationBudgetDate(err, operation, budgetDate, operation.budgetDate)
+                );
+            });
+    };
+}
+
 export function mergeOperations(toKeep, toRemove) {
     assertHas(toKeep, 'id');
     assertHas(toRemove, 'id');
@@ -290,6 +332,29 @@ export function deleteAccess(accessId, get) {
             })
             .catch(err => {
                 dispatch(fail.deleteAccess(err, accessId));
+            });
+    };
+}
+
+export function updateAccount(accountId, properties) {
+    assert(typeof accountId === 'string', 'UpdateAccount first arg must be a string id');
+
+    if (typeof properties.excludeFromBalance !== 'undefined') {
+        assert(
+            typeof properties.excludeFromBalance === 'boolean',
+            'UpdateAccount second arg excludeFromBalance field must be a boolean'
+        );
+    }
+
+    return dispatch => {
+        dispatch(basic.updateAccount(accountId, properties));
+        backend
+            .updateAccount(accountId, properties)
+            .then(updated => {
+                dispatch(success.updateAccount(accountId, updated));
+            })
+            .catch(err => {
+                dispatch(fail.updateAccount(err, accountId, properties));
             });
     };
 }
@@ -414,13 +479,16 @@ function handleSyncError(err) {
     }
 }
 
-export function createAccess(get, uuid, login, password, fields) {
+export function createAccess(get, uuid, login, password, fields, shouldCreateDefaultAlerts) {
     return dispatch => {
         dispatch(basic.createAccess(uuid, login, fields));
         backend
             .createAccess(uuid, login, password, fields)
             .then(results => {
                 dispatch(success.createAccess(uuid, login, fields, results));
+                if (shouldCreateDefaultAlerts) {
+                    dispatch(createDefaultAlerts(results.accounts));
+                }
             })
             .catch(err => {
                 dispatch(fail.createAccess(err));
@@ -439,6 +507,18 @@ export function createAlert(newAlert) {
             .catch(err => {
                 dispatch(fail.createAlert(err, newAlert));
             });
+    };
+}
+
+function createDefaultAlerts(accounts) {
+    return dispatch => {
+        const accountsIds = accounts.map(acc => acc.accountNumber);
+
+        for (let bankAccount of accountsIds) {
+            for (let alert of DefaultAlerts) {
+                dispatch(createAlert(Object.assign({}, alert, { bankAccount })));
+            }
+        }
     };
 }
 
@@ -526,6 +606,21 @@ function reduceSetOperationCustomLabel(state, action) {
     }
 
     return u.updateIn('operations', updateMapIf('id', action.operation.id, { customLabel }), state);
+}
+
+function reduceSetOperationBudgetDate(state, action) {
+    let { status } = action;
+
+    // Optimistic update.
+    let budgetDate;
+
+    if (status === FAIL) {
+        budgetDate = action.formerBudgetDate;
+    } else {
+        budgetDate = action.budgetDate || action.operation.date;
+    }
+
+    return u.updateIn('operations', updateMapIf('id', action.operation.id, { budgetDate }), state);
 }
 
 function sortAccesses(state) {
@@ -692,17 +787,31 @@ function reduceResyncBalance(state, action) {
     return state;
 }
 
+function reduceUpdateAccount(state, action) {
+    let { status, updated, id } = action;
+
+    if (status === SUCCESS) {
+        return u.updateIn(
+            'accounts',
+            updateMapIf('id', id, u(new Account(updated, state.constants.defaultCurrency))),
+            state
+        );
+    }
+
+    return state;
+}
+
 function reduceDeleteAccountInternal(state, accountId) {
-    let { accountNumber, bankAccess } = accountById(state, accountId);
+    let { bankAccess } = accountById(state, accountId);
 
     // Remove account:
     let ret = u.updateIn('accounts', u.reject(a => a.id === accountId), state);
 
     // Remove operations:
-    ret = u.updateIn('operations', u.reject(o => o.bankAccount === accountNumber), ret);
+    ret = u.updateIn('operations', u.reject(o => o.accountId === accountId), ret);
 
     // Remove alerts:
-    ret = u.updateIn('alerts', u.reject(a => a.bankAccount === accountNumber), ret);
+    ret = u.updateIn('alerts', u.reject(a => a.accountId === accountId), ret);
 
     // If this was the last account of the access, remove the access too:
     if (accountsByAccessId(state, bankAccess).length === 1) {
@@ -926,6 +1035,7 @@ const reducers = {
     CREATE_ALERT: reduceCreateAlert,
     DELETE_ACCESS: reduceDeleteAccess,
     DELETE_ACCOUNT: reduceDeleteAccount,
+    UPDATE_ACCOUNT: reduceUpdateAccount,
     DELETE_ALERT: reduceDeleteAlert,
     DELETE_CATEGORY: reduceDeleteCategory,
     DELETE_OPERATION: reduceDeleteOperation,
@@ -938,6 +1048,7 @@ const reducers = {
     SET_OPERATION_CATEGORY: reduceSetOperationCategory,
     SET_OPERATION_CUSTOM_LABEL: reduceSetOperationCustomLabel,
     SET_OPERATION_TYPE: reduceSetOperationType,
+    SET_OPERATION_BUDGET_DATE: reduceSetOperationBudgetDate,
     UPDATE_ALERT: reduceUpdateAlert,
     UPDATE_ACCESS: reduceUpdateAccess
 };
@@ -1091,15 +1202,14 @@ export function operationById(state, operationId) {
 }
 
 export function operationsByAccountId(state, accountId) {
-    let { accountNumber } = accountById(state, accountId);
-    return state.operations.filter(op => op.bankAccount === accountNumber);
+    return state.operations.filter(op => op.accountId === accountId);
 }
 
 export function alertPairsByType(state, alertType) {
     let pairs = [];
 
     for (let al of state.alerts.filter(a => a.type === alertType)) {
-        let accounts = state.accounts.filter(acc => acc.accountNumber === al.bankAccount);
+        let accounts = state.accounts.filter(acc => acc.id === al.accountId);
         if (!accounts.length) {
             debug('alert tied to no accounts, skipping');
             continue;

@@ -29,7 +29,7 @@ function computeOperationHeight(isSmallScreen) {
 function filterOperationsThisMonth(operations) {
     let now = new Date();
     return operations.filter(op => {
-        let d = new Date(op.date);
+        let d = new Date(op.budgetDate);
         return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
     });
 }
@@ -40,30 +40,22 @@ function computeTotal(format, filterFunction, operations, initial = 0) {
 }
 
 class OperationsComponent extends React.Component {
+    detailsModal = null;
+    operationPanel = null;
+    panelHeading = null;
+    thead = null;
+
     constructor(props) {
         super(props);
-
-        this.renderItems = this.renderItems.bind(this);
-        this.computeHeightAbove = this.computeHeightAbove.bind(this);
-        this.getOperationHeight = this.getOperationHeight.bind(this);
-        this.getNumItems = this.getNumItems.bind(this);
-
         this.operationHeight = computeOperationHeight(this.props.isSmallScreen);
-
-        this.selectModalOperation = this.selectModalOperation.bind(this);
-
-        this.detailsModal = null;
-        this.operationPanel = null;
-        this.panelHeading = null;
-        this.thead = null;
     }
 
-    selectModalOperation(operationId) {
+    selectModalOperation = operationId => {
         this.detailsModal.setOperationId(operationId);
-    }
+    };
 
     // Implementation of infinite list.
-    renderItems(low, high) {
+    renderItems = (low, high) => {
         return this.props.filteredOperations.slice(low, high).map(o => {
             let handleOpenModal = () => this.selectModalOperation(o.id);
             return (
@@ -76,31 +68,45 @@ class OperationsComponent extends React.Component {
                 />
             );
         });
-    }
+    };
+
+    computeHeightAbove = () => {
+        return this.heightAbove;
+    };
+
+    getOperationHeight = () => {
+        return this.operationHeight;
+    };
+
+    getNumItems = () => {
+        return this.props.filteredOperations.length;
+    };
+    // End of implementation of infinite list.
+
+    refDetailsModal = node => {
+        this.detailsModal = node;
+    };
+
+    refOperationPanel = node => {
+        this.operationPanel = node;
+    };
+
+    refPanelHeading = node => {
+        this.panelHeading = node;
+    };
+
+    refThead = node => {
+        this.thead = node;
+    };
 
     componentDidMount() {
         // Called after first render => safe to use findDOMNode.
         let heightAbove = ReactDOM.findDOMNode(this.operationPanel).offsetTop;
         heightAbove += ReactDOM.findDOMNode(this.panelHeading).scrollHeight;
         heightAbove += ReactDOM.findDOMNode(this.thead).scrollHeight;
-
         this.heightAbove = heightAbove;
-
         this.operationHeight = computeOperationHeight(this.props.isSmallScreen);
     }
-
-    computeHeightAbove() {
-        return this.heightAbove;
-    }
-
-    getOperationHeight() {
-        return this.operationHeight;
-    }
-
-    getNumItems() {
-        return this.props.filteredOperations.length;
-    }
-    // End of implementation of infinite list.
 
     render() {
         let asOf = $t('client.operations.as_of');
@@ -129,22 +135,9 @@ class OperationsComponent extends React.Component {
         let negativeSum = computeTotal(format, x => x.amount < 0, wellOperations, 0);
         let sum = computeTotal(format, () => true, wellOperations, 0);
 
-        let refDetailsModal = node => {
-            this.detailsModal = node;
-        };
-        let refOperationPanel = node => {
-            this.operationPanel = node;
-        };
-        let refPanelHeading = node => {
-            this.panelHeading = node;
-        };
-        let refThead = node => {
-            this.thead = node;
-        };
-
         return (
             <div>
-                <DetailsModal ref={refDetailsModal} formatCurrency={format} />
+                <DetailsModal ref={this.refDetailsModal} formatCurrency={format} />
 
                 <div className="operation-wells">
                     <AmountWell
@@ -182,44 +175,34 @@ class OperationsComponent extends React.Component {
 
                 <SearchComponent />
 
-                <div className="operation-panel panel panel-default" ref={refOperationPanel}>
-                    <div className="panel-heading" ref={refPanelHeading}>
+                <div className="operation-panel panel panel-default" ref={this.refOperationPanel}>
+                    <div className="panel-heading" ref={this.refPanelHeading}>
                         <h3 className="title panel-title">{$t('client.operations.title')}</h3>
                         <SyncButton account={this.props.account} />
                     </div>
 
-                    <div className="table-responsive">
-                        <table className="table table-hover table-bordered">
-                            <thead ref={refThead}>
-                                <tr>
-                                    <th className="hidden-xs" />
-                                    <th className="col-sm-1 col-xs-2">
-                                        {$t('client.operations.column_date')}
-                                    </th>
-                                    <th className="col-sm-2 hidden-xs">
-                                        {$t('client.operations.column_type')}
-                                    </th>
-                                    <th className="col-sm-6 col-xs-8">
-                                        {$t('client.operations.column_name')}
-                                    </th>
-                                    <th className="col-sm-1 col-xs-2">
-                                        {$t('client.operations.column_amount')}
-                                    </th>
-                                    <th className="col-sm-2 hidden-xs">
-                                        {$t('client.operations.column_category')}
-                                    </th>
-                                </tr>
-                            </thead>
-                            <InfiniteList
-                                ballast={OPERATION_BALLAST}
-                                getNumItems={this.getNumItems}
-                                getItemHeight={this.getOperationHeight}
-                                getHeightAbove={this.computeHeightAbove}
-                                renderItems={this.renderItems}
-                                containerId="content"
-                            />
-                        </table>
-                    </div>
+                    <table className="operation-table table table-hover table-bordered">
+                        <thead ref={this.refThead}>
+                            <tr>
+                                <th className="modale-button" />
+                                <th className="date">{$t('client.operations.column_date')}</th>
+                                <th className="type">{$t('client.operations.column_type')}</th>
+                                <th>{$t('client.operations.column_name')}</th>
+                                <th className="amount">{$t('client.operations.column_amount')}</th>
+                                <th className="category">
+                                    {$t('client.operations.column_category')}
+                                </th>
+                            </tr>
+                        </thead>
+                        <InfiniteList
+                            ballast={OPERATION_BALLAST}
+                            getNumItems={this.getNumItems}
+                            getItemHeight={this.getOperationHeight}
+                            getHeightAbove={this.computeHeightAbove}
+                            renderItems={this.renderItems}
+                            containerId="content"
+                        />
+                    </table>
                 </div>
             </div>
         );
